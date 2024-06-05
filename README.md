@@ -10,3 +10,4 @@ Requisite(s):
 Student must complete CSC 60 and CSC 130 and either CSC 137 or CPE 185. Not currently enrolled in CSC 139.
 
 DOCX viewer plugin required to view DOCx files
+PDF viewer plugin required to view PDF files
