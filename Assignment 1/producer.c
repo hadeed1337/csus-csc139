@@ -2,9 +2,9 @@
 CSC139 
 Summer 2024
 First Assignment
-Last Name, First Name
-Section #
-OSs Tested on: such as Linux, Mac, etc.
+Francis, Jacob
+Section 1
+OSs Tested on: MAC
 */
 
 #include <stdio.h>
