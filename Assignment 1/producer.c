@@ -102,7 +102,7 @@ void InitShm(int bufSize, int itemCnt)
 {
         int in = 0;
         int out = 0;
-        const char *name = "OS_HW1_Francis_Jacob"; // Name of shared memory object to be passed to shm_open
+        const char *name = "OS_HW1_JacobFrancis"; // Name of shared memory object to be passed to shm_open
 
         // Create shared memory block
         int shm_fd = shm_open(name, O_CREAT | O_RDWR, 0666);

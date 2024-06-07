@@ -36,11 +36,11 @@ int ReadAtBufIndex(int);
 
 int main()
 {
-        const char *name = "OS_HW1_Francis_Jacob"; // Name of shared memory block to be passed to shm_open
-        int bufSize;                               // Bounded buffer size
-        int itemCnt;                               // Number of items to be consumed
-        int in;                                    // Index of next item to produce
-        int out;                                   // Index of next item to consume
+        const char *name = "OS_HW1_JacobFrancis"; // Name of shared memory block to be passed to shm_open
+        int bufSize;                              // Bounded buffer size
+        int itemCnt;                              // Number of items to be consumed
+        int in;                                   // Index of next item to produce
+        int out;                                  // Index of next item to consume
 
         // Open shared memory block
         int shm_fd = shm_open(name, O_RDWR, 0666);
