@@ -22,6 +22,7 @@ OSs Tested on: MAC
 // Global pointer to the shared memory block
 void *gShmPtr;
 
+// Function prototypes
 void SetIn(int);
 void SetOut(int);
 void SetHeaderVal(int, int);
@@ -43,7 +44,17 @@ int main()
 
         // Open shared memory block
         int shm_fd = shm_open(name, O_RDWR, 0666);
+        if (shm_fd == -1)
+        {
+                perror("Shared memory opening failed");
+                exit(1);
+        }
         gShmPtr = mmap(0, SHM_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+        if (gShmPtr == MAP_FAILED)
+        {
+                perror("Shared memory mapping failed");
+                exit(1);
+        }
 
         // Read header values
         bufSize = GetBufSize();
@@ -51,23 +62,23 @@ int main()
         in = GetIn();
         out = GetOut();
 
+        // Check that the consumer has read the right values
         printf("Consumer reading: bufSize = %d, itemCnt = %d, in = %d, out = %d\n", bufSize, itemCnt, in, out);
 
         for (int i = 0; i < itemCnt; i++)
         {
                 // Wait if the buffer is empty
-                while (in == out)
+                while (GetIn() == GetOut())
                 {
                         // Busy waiting
                 }
 
                 // Consume item
-                int val = ReadAtBufIndex(out);
-                printf("Consuming Item %d with value %d at Index %d\n", i, val, out);
+                int val = ReadAtBufIndex(GetOut());
+                printf("Consuming Item %d with value %d at Index %d\n", i + 1, val, GetOut());
 
                 // Update out index
-                out = (out + 1) % bufSize;
-                SetOut(out);
+                SetOut((GetOut() + 1) % bufSize);
         }
 
         // Remove shared memory segment
@@ -80,16 +91,19 @@ int main()
         return 0;
 }
 
+// Set the value of shared variable "in"
 void SetIn(int val)
 {
         SetHeaderVal(2, val);
 }
 
+// Set the value of shared variable "out"
 void SetOut(int val)
 {
         SetHeaderVal(3, val);
 }
 
+// Get the ith value in the header
 int GetHeaderVal(int i)
 {
         int val;
@@ -98,38 +112,45 @@ int GetHeaderVal(int i)
         return val;
 }
 
+// Set the ith value in the header
 void SetHeaderVal(int i, int val)
 {
         void *ptr = gShmPtr + i * sizeof(int);
         memcpy(ptr, &val, sizeof(int));
 }
 
+// Get the value of shared variable "bufSize"
 int GetBufSize()
 {
         return GetHeaderVal(0);
 }
 
+// Get the value of shared variable "itemCnt"
 int GetItemCnt()
 {
         return GetHeaderVal(1);
 }
 
+// Get the value of shared variable "in"
 int GetIn()
 {
         return GetHeaderVal(2);
 }
 
+// Get the value of shared variable "out"
 int GetOut()
 {
         return GetHeaderVal(3);
 }
 
+// Write the given val at the given index in the bounded buffer
 void WriteAtBufIndex(int indx, int val)
 {
         void *ptr = gShmPtr + 4 * sizeof(int) + indx * sizeof(int);
         memcpy(ptr, &val, sizeof(int));
 }
 
+// Read the val at the given index in the bounded buffer
 int ReadAtBufIndex(int indx)
 {
         int val;
