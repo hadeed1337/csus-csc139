@@ -11,7 +11,7 @@ OSs Tested on: MAC
 #include <stdlib.h>
 #include <pthread.h>
 #include <sys/time.h>
-#include <unistd.h> // Include this header for usleep
+#include <unistd.h>
 #include <stdbool.h>
 
 #define MAX_SIZE 100000000
