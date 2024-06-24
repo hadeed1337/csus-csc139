@@ -10,7 +10,8 @@ OSs Tested on: MAC
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
-#include <sys/timeb.h>
+#include <sys/time.h>
+#include <unistd.h>
 #include <stdbool.h>
 
 #define MAX_SIZE 100000000
@@ -23,10 +24,10 @@ OSs Tested on: MAC
 long gRefTime;		 // For timing
 int gData[MAX_SIZE]; // The array that will hold the data
 
-int gThreadCount;			   // Number of threads
-int gDoneThreadCount;		   // Number of threads that are done at a certain point. Whenever a thread is done, it increments this. Used with the semaphore-based solution
-int gThreadProd[MAX_THREADS];  // The modular product for each array division that a single thread is responsible for
-bool gThreadDone[MAX_THREADS]; // Is this thread done? Used when the parent is continually checking on child threads
+int gThreadCount;						// Number of threads
+volatile int gDoneThreadCount;			// Number of threads that are done at a certain point. Whenever a thread is done, it increments this. Used with the semaphore-based solution
+int gThreadProd[MAX_THREADS];			// The modular product for each array division that a single thread is responsible for
+volatile bool gThreadDone[MAX_THREADS]; // Is this thread done? Used when the parent is continually checking on child threads
 
 // Mutex and condition variables
 pthread_mutex_t mutex;
@@ -42,7 +43,7 @@ void CalculateIndices(int arraySize, int thrdCnt, int indices[MAX_THREADS][3]); 
 int GetRand(int min, int max);													// Get a random number between min and max
 
 // Timing functions
-long GetMilliSecondTime(struct timeb timeBuf);
+long GetMilliSecondTime(struct timeval timeBuf);
 long GetCurrentTime(void);
 void SetTime(void);
 long GetTime(void);
@@ -110,21 +111,10 @@ int main(int argc, char *argv[])
 		pthread_attr_init(&attr[i]);
 		pthread_create(&tid[i], &attr[i], ThFindProd, (void *)indices[i]);
 	}
-	while (1)
+	while (gDoneThreadCount < gThreadCount)
 	{
-		bool allDone = true;
-		for (i = 0; i < gThreadCount; i++)
-		{
-			if (!gThreadDone[i])
-			{
-				allDone = false;
-				break;
-			}
-		}
-		if (allDone)
-		{
-			break;
-		}
+		// Busy waiting loop
+		usleep(100); // Sleep for 100 microseconds to reduce CPU usage
 	}
 	prod = ComputeTotalProduct();
 	printf("Threaded multiplication with parent continually checking on children completed in %ld ms. Product = %d\n", GetTime(), prod);
@@ -186,6 +176,9 @@ void *ThFindProd(void *param)
 
 	gThreadProd[threadNum] = prod;
 	gThreadDone[threadNum] = true;
+
+	__sync_fetch_and_add(&gDoneThreadCount, 1); // Atomic increment of gDoneThreadCount
+
 	return NULL;
 }
 
@@ -274,20 +267,20 @@ int GetRand(int x, int y)
 	return r;
 }
 
-long GetMilliSecondTime(struct timeb timeBuf)
+long GetMilliSecondTime(struct timeval timeBuf)
 {
 	long mliScndTime;
-	mliScndTime = timeBuf.time;
+	mliScndTime = timeBuf.tv_sec;
 	mliScndTime *= 1000;
-	mliScndTime += timeBuf.millitm;
+	mliScndTime += timeBuf.tv_usec / 1000;
 	return mliScndTime;
 }
 
 long GetCurrentTime(void)
 {
 	long crntTime = 0;
-	struct timeb timeBuf;
-	ftime(&timeBuf);
+	struct timeval timeBuf;
+	gettimeofday(&timeBuf, NULL);
 	crntTime = GetMilliSecondTime(timeBuf);
 	return crntTime;
 }
