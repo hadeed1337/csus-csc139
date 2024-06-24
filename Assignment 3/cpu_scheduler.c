@@ -1,3 +1,11 @@
+/*
+CSC139
+Summer 2024
+Third Assignment
+Francis, Jacob
+Section 1
+OSs Tested on: MAC
+*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
