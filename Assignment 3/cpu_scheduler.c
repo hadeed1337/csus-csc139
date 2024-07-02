@@ -1,12 +1,3 @@
-/*
-CSC139
-Summer 2024
-Third Assignment
-Francis, Jacob
-Section 1
-OSs Tested on: MAC
-*/
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,7 +12,6 @@ typedef struct
     int priority;
     int remaining_time;
     int waiting_time;
-    int completed_time;
 } Process;
 
 void read_input(const char *filename, char *algorithm, int *num_processes, Process processes[], int *time_quantum)
@@ -49,7 +39,6 @@ void read_input(const char *filename, char *algorithm, int *num_processes, Proce
                &processes[i].priority);
         processes[i].remaining_time = processes[i].burst_time;
         processes[i].waiting_time = 0;
-        processes[i].completed_time = 0;
     }
 
     fclose(file);
@@ -67,7 +56,7 @@ void write_output(const char *filename, const char *algorithm, int time_points[]
     fprintf(file, "%s\n", algorithm);
     for (int i = 0; i < schedule_length; i++)
     {
-        fprintf(file, "%d %d\n", time_points[i], process_schedule[i]);
+        fprintf(file, "%d\t%d\n", time_points[i], process_schedule[i]);
     }
     fprintf(file, "AVG Waiting Time: %.2f\n", avg_waiting_time);
 
@@ -128,23 +117,13 @@ void round_robin(Process processes[], int num_processes, int time_quantum, int *
         process_schedule[*schedule_length] = processes[current].process_number;
         (*schedule_length)++;
 
-        if (processes[current].remaining_time > time_quantum)
-        {
-            processes[current].remaining_time -= time_quantum;
-            time += time_quantum;
-        }
-        else
-        {
-            time += processes[current].remaining_time;
-            processes[current].remaining_time = 0;
-            processes[current].waiting_time = time - processes[current].arrival_time - processes[current].burst_time;
-            total_waiting_time += processes[current].waiting_time;
-            completed++;
-        }
+        int exec_time = processes[current].remaining_time > time_quantum ? time_quantum : processes[current].remaining_time;
+        processes[current].remaining_time -= exec_time;
+        time += exec_time;
 
         for (int i = 0; i < num_processes; i++)
         {
-            if (processes[i].arrival_time > time - time_quantum && processes[i].arrival_time <= time)
+            if (processes[i].arrival_time > time - exec_time && processes[i].arrival_time <= time)
             {
                 queue[rear++] = i;
             }
@@ -153,6 +132,12 @@ void round_robin(Process processes[], int num_processes, int time_quantum, int *
         if (processes[current].remaining_time > 0)
         {
             queue[rear++] = current;
+        }
+        else
+        {
+            processes[current].waiting_time = time - processes[current].arrival_time - processes[current].burst_time;
+            total_waiting_time += processes[current].waiting_time;
+            completed++;
         }
     }
 
@@ -248,55 +233,43 @@ void priority_scheduling_with_preemption(Process processes[], int num_processes,
     int time = 0;
     int completed = 0;
     int total_waiting_time = 0;
-    int current = -1;
+    int current_process = -1;
     int last_scheduled_time = -1;
 
     while (completed < num_processes)
     {
+        int highest_priority_index = -1;
         for (int i = 0; i < num_processes; i++)
         {
-            if (processes[i].arrival_time == time)
+            if (processes[i].arrival_time <= time && processes[i].remaining_time > 0)
             {
-                if (current == -1 || processes[i].priority < processes[current].priority)
+                if (highest_priority_index == -1 || processes[i].priority < processes[highest_priority_index].priority)
                 {
-                    if (current != -1 && processes[current].remaining_time > 0)
-                    {
-                        if (last_scheduled_time != time)
-                        {
-                            time_points[*schedule_length] = time;
-                            process_schedule[*schedule_length] = processes[current].process_number;
-                            (*schedule_length)++;
-                        }
-                    }
-                    current = i;
+                    highest_priority_index = i;
                 }
             }
         }
 
-        if (current != -1)
+        if (highest_priority_index != -1)
         {
-            if (last_scheduled_time != time)
+            if (current_process != highest_priority_index)
             {
+                current_process = highest_priority_index;
                 time_points[*schedule_length] = time;
-                process_schedule[*schedule_length] = processes[current].process_number;
+                process_schedule[*schedule_length] = processes[current_process].process_number;
                 (*schedule_length)++;
             }
-            processes[current].remaining_time--;
-            if (processes[current].remaining_time == 0)
+
+            processes[current_process].remaining_time--;
+            if (processes[current_process].remaining_time == 0)
             {
-                processes[current].waiting_time = time + 1 - processes[current].arrival_time - processes[current].burst_time;
-                total_waiting_time += processes[current].waiting_time;
+                processes[current_process].waiting_time = time + 1 - processes[current_process].arrival_time - processes[current_process].burst_time;
+                total_waiting_time += processes[current_process].waiting_time;
                 completed++;
-                current = -1;
+                current_process = -1;
             }
         }
-        else
-        {
-            time_points[*schedule_length] = time;
-            process_schedule[*schedule_length] = -1; // No process is currently executing
-            (*schedule_length)++;
-        }
-        last_scheduled_time = time;
+
         time++;
     }
 
