@@ -1,225 +1,181 @@
-/*
-CSC139
-Summer 2024
-Third Assignment
-Francis, Jacob
-Section 1
-OSs Tested on: MAC
-*/
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define MAX_PROCESSES 100
 
 typedef struct
 {
     int process_number;
     int arrival_time;
-    int cpu_burst;
+    int burst_time;
     int priority;
+    int remaining_time;
+    int waiting_time;
 } Process;
 
-// Function to read input from the file
-void read_input(const char *filename, char *algorithm, int *num_processes, Process **processes)
+void read_input(const char *filename, char *algorithm, int *num_processes, Process processes[], int *time_quantum)
 {
     FILE *file = fopen(filename, "r");
     if (!file)
     {
-        perror("Unable to open input file");
-        exit(EXIT_FAILURE);
+        perror("Failed to open file");
+        exit(1);
     }
 
     fscanf(file, "%s", algorithm);
+    if (strcmp(algorithm, "RR") == 0)
+    {
+        fscanf(file, "%d", time_quantum);
+    }
     fscanf(file, "%d", num_processes);
 
-    *processes = (Process *)malloc((*num_processes) * sizeof(Process));
-    for (int i = 0; i < *num_processes; ++i)
+    for (int i = 0; i < *num_processes; i++)
     {
-        fscanf(file, "%d %d %d %d", &(*processes)[i].process_number, &(*processes)[i].arrival_time,
-               &(*processes)[i].cpu_burst, &(*processes)[i].priority);
+        fscanf(file, "%d %d %d %d",
+               &processes[i].process_number,
+               &processes[i].arrival_time,
+               &processes[i].burst_time,
+               &processes[i].priority);
+        processes[i].remaining_time = processes[i].burst_time;
+        processes[i].waiting_time = 0;
     }
 
     fclose(file);
 }
 
-// Function to write output to the file and print to the console
-void write_output(const char *filename, const char *algorithm, int **schedule, int schedule_size, float avg_waiting_time)
+void write_output(const char *filename, const char *algorithm, int time_points[], int process_schedule[], int schedule_length, double avg_waiting_time)
 {
     FILE *file = fopen(filename, "w");
     if (!file)
     {
-        perror("Unable to open output file");
-        exit(EXIT_FAILURE);
+        perror("Failed to open file");
+        exit(1);
     }
 
-    printf("%s\n", algorithm);
     fprintf(file, "%s\n", algorithm);
-    for (int i = 0; i < schedule_size; ++i)
+    for (int i = 0; i < schedule_length; i++)
     {
-        printf("%d %d\n", schedule[i][0], schedule[i][1]);
-        fprintf(file, "%d %d\n", schedule[i][0], schedule[i][1]);
+        fprintf(file, "%d\t%d\n", time_points[i], process_schedule[i]);
     }
-    printf("AVG Waiting Time: %.2f\n", avg_waiting_time);
     fprintf(file, "AVG Waiting Time: %.2f\n", avg_waiting_time);
 
     fclose(file);
 }
 
-// Function to simulate Round Robin scheduling
-void simulate_round_robin(Process *processes, int num_processes, int time_quantum, int ***schedule, int *schedule_size, float *avg_waiting_time)
+void print_file(const char *filename)
 {
-    int capacity = 100;
-    *schedule = (int **)malloc(capacity * sizeof(int *));
-    for (int i = 0; i < capacity; ++i)
+    FILE *file = fopen(filename, "r");
+    if (!file)
     {
-        (*schedule)[i] = (int *)malloc(2 * sizeof(int));
+        perror("Failed to open file");
+        exit(1);
     }
 
+    char ch;
+    while ((ch = fgetc(file)) != EOF)
+    {
+        putchar(ch);
+    }
+
+    fclose(file);
+}
+
+void round_robin(Process processes[], int num_processes, int time_quantum, int *time_points, int *process_schedule, int *schedule_length, double *avg_waiting_time)
+{
     int time = 0;
-    int index = 0;
-    int *queue = (int *)malloc(num_processes * sizeof(int));
-    int front = 0;
-    int rear = 0;
-    int remaining_time[num_processes];
-    int waiting_time[num_processes];
-    int finished_processes = 0;
+    int queue[MAX_PROCESSES];
+    int front = 0, rear = 0;
+    int completed = 0;
+    int total_waiting_time = 0;
 
-    for (int i = 0; i < num_processes; ++i)
+    for (int i = 0; i < num_processes; i++)
     {
-        remaining_time[i] = processes[i].cpu_burst;
-        waiting_time[i] = 0;
+        if (processes[i].arrival_time == 0)
+        {
+            queue[rear++] = i;
+        }
     }
 
-    int current_process = -1;
-
-    while (finished_processes < num_processes)
+    while (completed < num_processes)
     {
-        for (int i = 0; i < num_processes; ++i)
+        if (front == rear)
         {
-            if (processes[i].arrival_time == time)
+            time++;
+            for (int i = 0; i < num_processes; i++)
+            {
+                if (processes[i].arrival_time == time)
+                {
+                    queue[rear++] = i;
+                }
+            }
+            continue;
+        }
+
+        int current = queue[front++];
+        time_points[*schedule_length] = time;
+        process_schedule[*schedule_length] = processes[current].process_number;
+        (*schedule_length)++;
+
+        int exec_time = processes[current].remaining_time > time_quantum ? time_quantum : processes[current].remaining_time;
+        processes[current].remaining_time -= exec_time;
+        time += exec_time;
+
+        for (int i = 0; i < num_processes; i++)
+        {
+            if (processes[i].arrival_time > time - exec_time && processes[i].arrival_time <= time)
             {
                 queue[rear++] = i;
             }
         }
 
-        if (front < rear)
+        if (processes[current].remaining_time > 0)
         {
-            current_process = queue[front++];
-            if (remaining_time[current_process] > time_quantum)
-            {
-                remaining_time[current_process] -= time_quantum;
-                time += time_quantum;
-                queue[rear++] = current_process;
-            }
-            else
-            {
-                time += remaining_time[current_process];
-                remaining_time[current_process] = 0;
-                finished_processes++;
-            }
-
-            (*schedule)[index][0] = time;
-            (*schedule)[index][1] = processes[current_process].process_number;
-            index++;
-
-            if (index >= capacity)
-            {
-                capacity *= 2;
-                *schedule = (int **)realloc(*schedule, capacity * sizeof(int *));
-                for (int i = index; i < capacity; ++i)
-                {
-                    (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-                }
-            }
+            queue[rear++] = current;
         }
         else
         {
-            time++;
-        }
-
-        for (int i = front; i < rear; ++i)
-        {
-            if (queue[i] != current_process)
-            {
-                waiting_time[queue[i]]++;
-            }
+            processes[current].waiting_time = time - processes[current].arrival_time - processes[current].burst_time;
+            total_waiting_time += processes[current].waiting_time;
+            completed++;
         }
     }
 
-    *schedule_size = index;
-
-    int total_waiting_time = 0;
-    for (int i = 0; i < num_processes; ++i)
-    {
-        total_waiting_time += waiting_time[i];
-    }
-    *avg_waiting_time = (float)total_waiting_time / num_processes;
-
-    free(queue);
+    *avg_waiting_time = (double)total_waiting_time / num_processes;
 }
 
-// Function to simulate Shortest Job First scheduling
-void simulate_sjf(Process *processes, int num_processes, int ***schedule, int *schedule_size, float *avg_waiting_time)
+void shortest_job_first(Process processes[], int num_processes, int *time_points, int *process_schedule, int *schedule_length, double *avg_waiting_time)
 {
-    int capacity = 100;
-    *schedule = (int **)malloc(capacity * sizeof(int *));
-    for (int i = 0; i < capacity; ++i)
-    {
-        (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-    }
-
     int time = 0;
-    int index = 0;
-    int remaining_processes = num_processes;
-    int waiting_time[num_processes];
-    int finished[num_processes];
+    int completed = 0;
+    int total_waiting_time = 0;
+    int process_index;
 
-    for (int i = 0; i < num_processes; ++i)
+    while (completed < num_processes)
     {
-        waiting_time[i] = 0;
-        finished[i] = 0;
-    }
-
-    while (remaining_processes > 0)
-    {
-        int min_burst = __INT_MAX__;
-        int shortest = -1;
-
-        for (int i = 0; i < num_processes; ++i)
+        process_index = -1;
+        for (int i = 0; i < num_processes; i++)
         {
-            if (!finished[i] && processes[i].arrival_time <= time && processes[i].cpu_burst < min_burst)
+            if (processes[i].arrival_time <= time && processes[i].remaining_time > 0)
             {
-                min_burst = processes[i].cpu_burst;
-                shortest = i;
+                if (process_index == -1 || processes[i].remaining_time < processes[process_index].remaining_time)
+                {
+                    process_index = i;
+                }
             }
         }
 
-        if (shortest != -1)
+        if (process_index != -1)
         {
-            time += processes[shortest].cpu_burst;
-            finished[shortest] = 1;
-            remaining_processes--;
+            time_points[*schedule_length] = time;
+            process_schedule[*schedule_length] = processes[process_index].process_number;
+            (*schedule_length)++;
 
-            (*schedule)[index][0] = time;
-            (*schedule)[index][1] = processes[shortest].process_number;
-            index++;
-
-            if (index >= capacity)
-            {
-                capacity *= 2;
-                *schedule = (int **)realloc(*schedule, capacity * sizeof(int *));
-                for (int i = index; i < capacity; ++i)
-                {
-                    (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-                }
-            }
-
-            for (int i = 0; i < num_processes; ++i)
-            {
-                if (!finished[i] && processes[i].arrival_time <= time)
-                {
-                    waiting_time[i] += processes[shortest].cpu_burst;
-                }
-            }
+            time += processes[process_index].burst_time;
+            processes[process_index].waiting_time = time - processes[process_index].arrival_time - processes[process_index].burst_time;
+            total_waiting_time += processes[process_index].waiting_time;
+            processes[process_index].remaining_time = 0;
+            completed++;
         }
         else
         {
@@ -227,79 +183,41 @@ void simulate_sjf(Process *processes, int num_processes, int ***schedule, int *s
         }
     }
 
-    *schedule_size = index;
-
-    int total_waiting_time = 0;
-    for (int i = 0; i < num_processes; ++i)
-    {
-        total_waiting_time += waiting_time[i] - processes[i].cpu_burst;
-    }
-    *avg_waiting_time = (float)total_waiting_time / num_processes;
+    *avg_waiting_time = (double)total_waiting_time / num_processes;
 }
 
-// Function to simulate Priority Scheduling without Preemption
-void simulate_priority_no_preemption(Process *processes, int num_processes, int ***schedule, int *schedule_size, float *avg_waiting_time)
+void priority_scheduling_no_preemption(Process processes[], int num_processes, int *time_points, int *process_schedule, int *schedule_length, double *avg_waiting_time)
 {
-    int capacity = 100;
-    *schedule = (int **)malloc(capacity * sizeof(int *));
-    for (int i = 0; i < capacity; ++i)
-    {
-        (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-    }
-
     int time = 0;
-    int index = 0;
-    int remaining_processes = num_processes;
-    int waiting_time[num_processes];
-    int finished[num_processes];
+    int completed = 0;
+    int total_waiting_time = 0;
+    int process_index;
 
-    for (int i = 0; i < num_processes; ++i)
+    while (completed < num_processes)
     {
-        waiting_time[i] = 0;
-        finished[i] = 0;
-    }
-
-    while (remaining_processes > 0)
-    {
-        int highest_priority = __INT_MAX__;
-        int highest = -1;
-
-        for (int i = 0; i < num_processes; ++i)
+        process_index = -1;
+        for (int i = 0; i < num_processes; i++)
         {
-            if (!finished[i] && processes[i].arrival_time <= time && processes[i].priority < highest_priority)
+            if (processes[i].arrival_time <= time && processes[i].remaining_time > 0)
             {
-                highest_priority = processes[i].priority;
-                highest = i;
+                if (process_index == -1 || processes[i].priority < processes[process_index].priority)
+                {
+                    process_index = i;
+                }
             }
         }
 
-        if (highest != -1)
+        if (process_index != -1)
         {
-            time += processes[highest].cpu_burst;
-            finished[highest] = 1;
-            remaining_processes--;
+            time_points[*schedule_length] = time;
+            process_schedule[*schedule_length] = processes[process_index].process_number;
+            (*schedule_length)++;
 
-            (*schedule)[index][0] = time;
-            (*schedule)[index][1] = processes[highest].process_number;
-            index++;
-
-            if (index >= capacity)
-            {
-                capacity *= 2;
-                *schedule = (int **)realloc(*schedule, capacity * sizeof(int *));
-                for (int i = index; i < capacity; ++i)
-                {
-                    (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-                }
-            }
-
-            for (int i = 0; i < num_processes; ++i)
-            {
-                if (!finished[i] && processes[i].arrival_time <= time)
-                {
-                    waiting_time[i] += processes[highest].cpu_burst;
-                }
-            }
+            time += processes[process_index].burst_time;
+            processes[process_index].waiting_time = time - processes[process_index].arrival_time - processes[process_index].burst_time;
+            total_waiting_time += processes[process_index].waiting_time;
+            processes[process_index].remaining_time = 0;
+            completed++;
         }
         else
         {
@@ -307,180 +225,95 @@ void simulate_priority_no_preemption(Process *processes, int num_processes, int 
         }
     }
 
-    *schedule_size = index;
-
-    int total_waiting_time = 0;
-    for (int i = 0; i < num_processes; ++i)
-    {
-        total_waiting_time += waiting_time[i] - processes[i].cpu_burst;
-    }
-    *avg_waiting_time = (float)total_waiting_time / num_processes;
+    *avg_waiting_time = (double)total_waiting_time / num_processes;
 }
 
-// Function to simulate Priority Scheduling with Preemption
-void simulate_priority_with_preemption(Process *processes, int num_processes, int ***schedule, int *schedule_size, float *avg_waiting_time)
+void priority_scheduling_with_preemption(Process processes[], int num_processes, int *time_points, int *process_schedule, int *schedule_length, double *avg_waiting_time)
 {
-    int capacity = 100;
-    *schedule = (int **)malloc(capacity * sizeof(int *));
-    for (int i = 0; i < capacity; ++i)
-    {
-        (*schedule)[i] = (int *)malloc(2 * sizeof(int));
-    }
-
     int time = 0;
-    int index = 0;
-    int *queue = (int *)malloc(num_processes * sizeof(int));
-    int front = 0;
-    int rear = 0;
-    int remaining_time[num_processes];
-    int waiting_time[num_processes];
-    int finished[num_processes];
-    int highest_priority = __INT_MAX__;
+    int completed = 0;
+    int total_waiting_time = 0;
     int current_process = -1;
+    int last_scheduled_time = -1;
 
-    for (int i = 0; i < num_processes; ++i)
+    while (completed < num_processes)
     {
-        remaining_time[i] = processes[i].cpu_burst;
-        waiting_time[i] = 0;
-        finished[i] = 0;
-    }
-
-    while (1)
-    {
-        int all_finished = 1;
-        for (int i = 0; i < num_processes; ++i)
+        int highest_priority_index = -1;
+        for (int i = 0; i < num_processes; i++)
         {
-            if (!finished[i])
+            if (processes[i].arrival_time <= time && processes[i].remaining_time > 0)
             {
-                all_finished = 0;
-                break;
-            }
-        }
-        if (all_finished)
-        {
-            break;
-        }
-
-        for (int i = 0; i < num_processes; ++i)
-        {
-            if (processes[i].arrival_time == time)
-            {
-                queue[rear++] = i;
-            }
-        }
-
-        if (current_process == -1 || remaining_time[current_process] == 0)
-        {
-            highest_priority = __INT_MAX__;
-            current_process = -1;
-            for (int i = front; i < rear; ++i)
-            {
-                int p = queue[i];
-                if (!finished[p] && processes[p].priority < highest_priority)
+                if (highest_priority_index == -1 || processes[i].priority < processes[highest_priority_index].priority)
                 {
-                    highest_priority = processes[p].priority;
-                    current_process = p;
+                    highest_priority_index = i;
                 }
             }
         }
 
-        if (current_process != -1)
+        if (highest_priority_index != -1)
         {
-            (*schedule)[index][0] = time;
-            (*schedule)[index][1] = processes[current_process].process_number;
-            index++;
-
-            remaining_time[current_process]--;
-            if (remaining_time[current_process] == 0)
+            if (current_process != highest_priority_index)
             {
-                finished[current_process] = 1;
-                for (int i = front; i < rear; ++i)
-                {
-                    if (queue[i] == current_process)
-                    {
-                        for (int j = i; j < rear - 1; ++j)
-                        {
-                            queue[j] = queue[j + 1];
-                        }
-                        rear--;
-                        break;
-                    }
-                }
+                current_process = highest_priority_index;
+                time_points[*schedule_length] = time;
+                process_schedule[*schedule_length] = processes[current_process].process_number;
+                (*schedule_length)++;
+            }
+
+            processes[current_process].remaining_time--;
+            if (processes[current_process].remaining_time == 0)
+            {
+                processes[current_process].waiting_time = time + 1 - processes[current_process].arrival_time - processes[current_process].burst_time;
+                total_waiting_time += processes[current_process].waiting_time;
+                completed++;
+                current_process = -1;
             }
         }
 
         time++;
-
-        for (int i = front; i < rear; ++i)
-        {
-            if (queue[i] != current_process)
-            {
-                waiting_time[queue[i]]++;
-            }
-        }
     }
 
-    *schedule_size = index;
-
-    int total_waiting_time = 0;
-    for (int i = 0; i < num_processes; ++i)
-    {
-        total_waiting_time += waiting_time[i];
-    }
-    *avg_waiting_time = (float)total_waiting_time / num_processes;
-
-    free(queue);
+    *avg_waiting_time = (double)total_waiting_time / num_processes;
 }
 
 int main()
 {
     char algorithm[20];
     int num_processes;
-    Process *processes;
+    int time_quantum = 0;
+    Process processes[MAX_PROCESSES];
 
-    read_input("input.txt", algorithm, &num_processes, &processes);
+    read_input("input.txt", algorithm, &num_processes, processes, &time_quantum);
 
-    int **schedule;
-    int schedule_size;
-    float avg_waiting_time;
+    int time_points[MAX_PROCESSES * 100];
+    int process_schedule[MAX_PROCESSES * 100];
+    int schedule_length = 0;
+    double avg_waiting_time;
 
-    // Print input data
-    printf("Algorithm: %s\n", algorithm);
-    printf("Number of Processes: %d\n", num_processes);
-    for (int i = 0; i < num_processes; ++i)
+    if (strcmp(algorithm, "RR") == 0)
     {
-        printf("Process %d: Arrival Time = %d, CPU Burst = %d, Priority = %d\n",
-               processes[i].process_number, processes[i].arrival_time,
-               processes[i].cpu_burst, processes[i].priority);
-    }
-
-    if (strncmp(algorithm, "RR", 2) == 0)
-    {
-        int time_quantum = atoi(&algorithm[3]);
-        simulate_round_robin(processes, num_processes, time_quantum, &schedule, &schedule_size, &avg_waiting_time);
+        round_robin(processes, num_processes, time_quantum, time_points, process_schedule, &schedule_length, &avg_waiting_time);
     }
     else if (strcmp(algorithm, "SJF") == 0)
     {
-        simulate_sjf(processes, num_processes, &schedule, &schedule_size, &avg_waiting_time);
+        shortest_job_first(processes, num_processes, time_points, process_schedule, &schedule_length, &avg_waiting_time);
     }
     else if (strcmp(algorithm, "PR_noPREMP") == 0)
     {
-        simulate_priority_no_preemption(processes, num_processes, &schedule, &schedule_size, &avg_waiting_time);
+        priority_scheduling_no_preemption(processes, num_processes, time_points, process_schedule, &schedule_length, &avg_waiting_time);
     }
     else if (strcmp(algorithm, "PR_withPREMP") == 0)
     {
-        simulate_priority_with_preemption(processes, num_processes, &schedule, &schedule_size, &avg_waiting_time);
+        priority_scheduling_with_preemption(processes, num_processes, time_points, process_schedule, &schedule_length, &avg_waiting_time);
     }
 
-    write_output("output.txt", algorithm, schedule, schedule_size, avg_waiting_time);
+    write_output("output.txt", algorithm, time_points, process_schedule, schedule_length, avg_waiting_time);
 
-    // Free allocated memory
-    for (int i = 0; i < schedule_size; ++i)
-    {
-        free(schedule[i]);
-    }
-    free(schedule);
-    free(processes);
+    printf("Input:\n");
+    print_file("input.txt");
+
+    printf("\nOutput:\n");
+    print_file("output.txt");
 
     return 0;
 }
